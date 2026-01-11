@@ -20,10 +20,14 @@ import {
     ZOOM_LEVELS,
     DEFAULT_ZOOM_INDEX,
     COLOR_PALETTE,
+    DEFAULT_MIN_YEAR,
+    DEFAULT_MAX_YEAR,
+    DRAG_THRESHOLD_PX,
 } from "./constants";
 import {
     parseDate,
     formatDate,
+    normalizeDateString,
     addDays,
     getDaysDiff,
     getMonthYear,
@@ -44,13 +48,43 @@ import { calculateTrackLanes } from "./utils/eventLanes";
 
 // -- Main App Component --
 
+const normalizeEventDates = (event: IEvent): IEvent => {
+    const startDate = normalizeDateString(event.startDate) || event.startDate;
+    const endDate =
+        normalizeDateString(event.endDate || event.startDate) ||
+        event.endDate ||
+        event.startDate;
+    return {
+        ...event,
+        startDate,
+        endDate,
+    };
+};
+
+const normalizeEventList = (events: IEvent[]) =>
+    events.map((event) => normalizeEventDates(event));
+
 export default function App() {
     // -- State --
     const [data, setData] = useState<ITimelineData>(() => {
         const saved = localStorage.getItem("chrono_data");
-        return saved
-            ? JSON.parse(saved)
-            : { tracks: DEFAULT_TRACKS, events: DEFAULT_EVENTS };
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed?.tracks && parsed?.events) {
+                    return {
+                        tracks: parsed.tracks,
+                        events: normalizeEventList(parsed.events),
+                    };
+                }
+            } catch {
+                // fall through to defaults
+            }
+        }
+        return {
+            tracks: DEFAULT_TRACKS,
+            events: normalizeEventList(DEFAULT_EVENTS),
+        };
     });
 
     const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
@@ -124,11 +158,11 @@ export default function App() {
                 // fall through to defaults
             }
         }
-        return { minYear: 2020, maxYear: 2030 };
+        return { minYear: DEFAULT_MIN_YEAR, maxYear: DEFAULT_MAX_YEAR };
     });
     const [boundsDraft, setBoundsDraft] = useState<IViewBounds>(() => ({
-        minYear: 2020,
-        maxYear: 2030,
+        minYear: DEFAULT_MIN_YEAR,
+        maxYear: DEFAULT_MAX_YEAR,
     }));
 
     const timelineRange = useMemo(() => {
@@ -185,6 +219,26 @@ export default function App() {
         }
     }, [zoomIndex, timelineRange, pixelsPerDay]);
 
+    // Scroll to center on today's date on initial load
+    const hasScrolledToTodayRef = useRef(false);
+    useLayoutEffect(() => {
+        if (!hasScrolledToTodayRef.current && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to midnight
+
+            // Calculate days from timeline start to today
+            const daysFromStart = getDaysDiff(timelineRange.min, today);
+            const todayPixel = daysFromStart * pixelsPerDay;
+
+            // Center the view on today
+            const newScrollLeft = todayPixel - container.clientWidth / 2;
+            container.scrollLeft = Math.max(0, newScrollLeft);
+
+            hasScrolledToTodayRef.current = true;
+        }
+    }, [timelineRange, pixelsPerDay]);
+
     // -- Panning Logic --
     useEffect(() => {
         const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -240,7 +294,7 @@ export default function App() {
             }
         };
 
-        const handleGlobalMouseUp = () => {
+        const handleGlobalMouseUp = (e: MouseEvent) => {
             // Panning Cleanup
             if (panStateRef.current.isActive) {
                 panStateRef.current.isActive = false;
@@ -254,13 +308,27 @@ export default function App() {
             // Event Dragging Cleanup
             const state = dragStateRef.current;
             if (state.isDragging && state.eventId) {
-                const deltaX = state.currentX - state.startX;
-
-                if (
-                    Math.abs(deltaX) > 2 ||
+                // Use e.clientX directly to avoid race condition with React state updates
+                const deltaX = e.clientX - state.startX;
+                const deltaY = e.clientY - state.startY;
+                const movedEnough =
+                    Math.abs(deltaX) > DRAG_THRESHOLD_PX ||
                     (state.mode === "move" &&
-                        state.targetTrackId !== state.initialTrackId)
-                ) {
+                        Math.abs(deltaY) > DRAG_THRESHOLD_PX);
+
+                // Detect target track from actual mouse position at release
+                let finalTargetTrackId = state.initialTrackId;
+                if (state.mode === "move") {
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    const trackRow = el?.closest("[data-track-id]");
+                    if (trackRow) {
+                        finalTargetTrackId =
+                            trackRow.getAttribute("data-track-id") ||
+                            state.initialTrackId;
+                    }
+                }
+
+                if (movedEnough) {
                     setSuppressClick(true);
                     setTimeout(() => setSuppressClick(false), 50);
 
@@ -281,8 +349,7 @@ export default function App() {
                             parseDate(state.initialEndDate)
                         );
                         newEndDate = addDays(newStartDate, duration);
-                        if (state.targetTrackId)
-                            newTrackId = state.targetTrackId;
+                        newTrackId = finalTargetTrackId;
                     } else if (state.mode === "resize-start") {
                         newStartDate = addDays(
                             parseDate(state.initialStartDate),
@@ -381,6 +448,7 @@ export default function App() {
         event: IEvent,
         mode: DragMode
     ) => {
+        if (e.button !== 0) return;
         e.stopPropagation();
         // Note: Don't call e.preventDefault() here as it blocks double-click events
 
@@ -471,6 +539,26 @@ export default function App() {
         }
     };
 
+    const handleReorderTracks = (fromIndex: number, toIndex: number) => {
+        if (fromIndex === toIndex) return;
+
+        setData((prev) => {
+            const sortedTracks = [...prev.tracks].sort(
+                (a, b) => a.order - b.order
+            );
+            const [movedTrack] = sortedTracks.splice(fromIndex, 1);
+            sortedTracks.splice(toIndex, 0, movedTrack);
+
+            // Update order property for all tracks
+            const updatedTracks = sortedTracks.map((track, index) => ({
+                ...track,
+                order: index,
+            }));
+
+            return { ...prev, tracks: updatedTracks };
+        });
+    };
+
     const handleAddEvent = (trackId: string, dateStr?: string) => {
         const startDate = dateStr ? parseDate(dateStr) : new Date();
         const endDate = addDays(startDate, 7); // Default 7-day duration
@@ -489,17 +577,17 @@ export default function App() {
 
     const handleEditEvent = (event: IEvent) => {
         if (suppressClick) return;
-        setEditingEvent({ ...event });
+        setEditingEvent(normalizeEventDates(event));
         setActiveModal(ModalType.EDIT_EVENT);
     };
 
     const handleSaveEvent = () => {
         if (!editingEvent) return;
         // Ensure endDate is always set (default to startDate if empty)
-        const eventToSave = {
+        const eventToSave = normalizeEventDates({
             ...editingEvent,
             endDate: editingEvent.endDate || editingEvent.startDate,
-        };
+        });
         setData((prev) => {
             const exists = prev.events.find((e) => e.id === eventToSave.id);
             if (exists) {
@@ -543,7 +631,10 @@ export default function App() {
                 try {
                     const imported = JSON.parse(evt.target?.result as string);
                     if (imported.tracks && imported.events) {
-                        setData(imported);
+                        setData({
+                            tracks: imported.tracks,
+                            events: normalizeEventList(imported.events),
+                        });
                     } else {
                         alert("Invalid JSON format");
                     }
@@ -850,6 +941,13 @@ export default function App() {
         if (!dragState.isDragging || !dragState.eventId) return null;
 
         const deltaX = dragState.currentX - dragState.startX;
+        const deltaY = dragState.currentY - dragState.startY;
+        const movedEnough =
+            dragState.mode === "move"
+                ? Math.abs(deltaX) > DRAG_THRESHOLD_PX ||
+                  Math.abs(deltaY) > DRAG_THRESHOLD_PX
+                : Math.abs(deltaX) > DRAG_THRESHOLD_PX;
+        if (!movedEnough) return null;
         const deltaDays = Math.round(deltaX / pixelsPerDay);
         const initialStart = parseDate(dragState.initialStartDate);
         const initialEnd = parseDate(dragState.initialEndDate);
@@ -966,6 +1064,12 @@ export default function App() {
         [data.events, data.tracks]
     );
 
+    // Sort tracks by order for consistent display
+    const sortedTracks = useMemo(
+        () => [...data.tracks].sort((a, b) => a.order - b.order),
+        [data.tracks]
+    );
+
     const isTrackModalOpen = activeModal === ModalType.EDIT_TRACK;
     const isEventModalOpen = activeModal === ModalType.EDIT_EVENT;
     const isDataModalOpen = activeModal === ModalType.IMPORT_EXPORT;
@@ -987,14 +1091,15 @@ export default function App() {
             <div className="flex-1 overflow-hidden relative flex flex-col cursor-default">
                 <div className="flex-1 flex overflow-hidden">
                     <TrackSidebar
-                        tracks={data.tracks}
+                        tracks={sortedTracks}
                         trackLaneInfo={trackLaneInfo}
                         onAddTrack={handleAddTrack}
                         onEditTrack={handleEditTrack}
+                        onReorderTracks={handleReorderTracks}
                     />
 
                     <TimelineCanvas
-                        tracks={data.tracks}
+                        tracks={sortedTracks}
                         trackLaneInfo={trackLaneInfo}
                         dragState={dragState}
                         isPanning={isPanning}

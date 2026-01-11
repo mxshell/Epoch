@@ -3,6 +3,7 @@ import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { ColorPicker } from "./color/ColorPicker";
 import { IEvent, ITrack } from "../types";
+import { normalizeDateString } from "../utils/dateUtils";
 
 type EventModalProps = {
     isOpen: boolean;
@@ -24,6 +25,11 @@ export const EventModal: React.FC<EventModalProps> = ({
     onDelete,
 }) => {
     if (!isOpen || !editingEvent) return null;
+
+    const startDateValue = normalizeDateString(editingEvent.startDate);
+    const endDateValue = normalizeDateString(
+        editingEvent.endDate || editingEvent.startDate
+    );
 
     return (
         <Modal
@@ -65,10 +71,10 @@ export const EventModal: React.FC<EventModalProps> = ({
                         <input
                             type="date"
                             className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            value={editingEvent.startDate || ""}
+                            value={startDateValue}
                             onChange={(e) => {
                                 const newStartDate = e.target.value;
-                                const currentEndDate = editingEvent.endDate || editingEvent.startDate;
+                                const currentEndDate = endDateValue || newStartDate;
                                 // If new start date is after current end date, adjust end date
                                 const updatedEndDate = newStartDate > currentEndDate ? newStartDate : currentEndDate;
                                 onChange({
@@ -86,8 +92,8 @@ export const EventModal: React.FC<EventModalProps> = ({
                         <input
                             type="date"
                             className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            value={editingEvent.endDate || ""}
-                            min={editingEvent.startDate}
+                            value={endDateValue}
+                            min={startDateValue}
                             onChange={(e) =>
                                 onChange({
                                     ...editingEvent,
@@ -150,4 +156,3 @@ export const EventModal: React.FC<EventModalProps> = ({
         </Modal>
     );
 };
-

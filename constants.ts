@@ -1,11 +1,26 @@
 import { ITrack, IEvent } from './types';
 
-// Helper to get date string relative to today
-const getDateStr = (daysFromToday: number): string => {
-  const date = new Date();
-  date.setDate(date.getDate() + daysFromToday);
-  return date.toISOString().split('T')[0];
+// Helper to get date string relative to today (local timezone)
+const getDateStr = (daysFromCenterDate: number): string => {
+  const date = new Date(); 
+  // set center date to 2026-04-20
+  date.setMonth(3);
+  date.setDate(20);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + daysFromCenterDate);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
+
+const getCurrentYear = () => {
+  const date = new Date();
+  return date.getFullYear();
+};
+
+export const DEFAULT_MIN_YEAR = getCurrentYear();
+export const DEFAULT_MAX_YEAR = getCurrentYear() + 1;
 
 export const DEFAULT_TRACKS: ITrack[] = [
   { id: 'work', title: 'Work', color: '#3b82f6', order: 0 },
@@ -93,13 +108,15 @@ export const DEFAULT_EVENTS: IEvent[] = [
   },
 ];
 
+export const DRAG_THRESHOLD_PX = 3;
+
 // Pixels per day
 // 0.5 = 180px/year (Year view)
 // 2 = 60px/month (Month view)
 // 10 = Month view detailed
 // 50 = Day view
 // 200 = Detailed day/hour view
-export const ZOOM_LEVELS = [0.5, 1, 2.5, 5, 10, 25, 50, 100, 200]; 
+export const ZOOM_LEVELS = [0.1, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 200]; 
 export const DEFAULT_ZOOM_INDEX = 4; // 10px/day
 
 export const COLOR_PALETTE = [

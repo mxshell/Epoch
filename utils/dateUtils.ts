@@ -1,22 +1,65 @@
-/**
- * Parses a YYYY-MM-DD string into a Date object (UTC midnight).
- */
-export const parseDate = (dateStr: string): Date => {
-  return new Date(dateStr);
-};
+const DATE_PREFIX_REGEX = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})/;
 
 /**
- * Formats a Date object to YYYY-MM-DD string.
+ * Formats a Date object to YYYY-MM-DD string (local timezone).
  */
 export const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 /**
- * Formats a Date object to YYYY-MM-DD HH:mm string.
+ * Normalizes a date string into YYYY-MM-DD (local date).
+ * Accepts ISO-like strings or loose YYYY-M-D formats.
+ */
+export const normalizeDateString = (value: string): string => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  const prefixMatch = trimmed.match(DATE_PREFIX_REGEX);
+  if (prefixMatch) {
+    const [, year, month, day] = prefixMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric)) {
+    return formatDate(new Date(numeric));
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDate(parsed);
+  }
+
+  return "";
+};
+
+/**
+ * Parses a YYYY-MM-DD string into a Date object (local midnight).
+ */
+export const parseDate = (dateStr: string): Date => {
+  // Parse as local time by splitting the string
+  // new Date("YYYY-MM-DD") treats the string as UTC, causing timezone issues
+  const normalized = normalizeDateString(dateStr);
+  if (!normalized) {
+    return new Date(NaN);
+  }
+  const [year, month, day] = normalized.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+/**
+ * Formats a Date object to YYYY-MM-DD HH:mm string (local timezone).
  */
 export const formatDateTime = (date: Date): string => {
-  return date.toISOString().replace('T', ' ').substring(0, 16);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
 /**

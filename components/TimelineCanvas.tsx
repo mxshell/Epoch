@@ -1,6 +1,8 @@
 import React from "react";
 import { GripVertical, Plus } from "lucide-react";
 import { IEvent, ITrack, IDragState, DragMode } from "../types";
+import { DRAG_THRESHOLD_PX } from "../constants";
+import { normalizeDateString } from "../utils/dateUtils";
 import {
     TrackLaneInfo,
     EventWithLane,
@@ -56,11 +58,16 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
 }) => {
     const renderEvent = (event: EventWithLane, isDraggingThis: boolean) => {
         let style: React.CSSProperties = getEventStyle(event);
+        const deltaX = dragState.currentX - dragState.startX;
+        const deltaY = dragState.currentY - dragState.startY;
+        const hasDragMovement =
+            isDraggingThis &&
+            (dragState.mode === "move"
+                ? Math.abs(deltaX) > DRAG_THRESHOLD_PX ||
+                  Math.abs(deltaY) > DRAG_THRESHOLD_PX
+                : Math.abs(deltaX) > DRAG_THRESHOLD_PX);
 
-        if (isDraggingThis) {
-            const deltaX = dragState.currentX - dragState.startX;
-            const deltaY = dragState.currentY - dragState.startY;
-
+        if (hasDragMovement) {
             if (dragState.mode === "move") {
                 style = {
                     ...style,
@@ -100,6 +107,13 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
             }
         }
 
+        const startDateLabel =
+            normalizeDateString(event.startDate) || event.startDate;
+        const endDateLabel =
+            normalizeDateString(event.endDate || "") || event.endDate;
+        const showEndDate =
+            Boolean(endDateLabel) && endDateLabel !== startDateLabel;
+
         const { backgroundColor, ...wrapperStyle } = style;
         const topPosition = getEventTopPosition(event.lane);
 
@@ -107,7 +121,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
             <div
                 key={event.id}
                 className={`absolute group/event ${
-                    !isDraggingThis ? "z-10 cursor-grab" : ""
+                    !hasDragMovement ? "z-10 cursor-grab" : ""
                 }`}
                 style={{
                     ...wrapperStyle,
@@ -137,9 +151,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                         <>
                             <div
                                 className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-black/10 z-20 flex items-center justify-center opacity-0 group-hover/event:opacity-100 transition-opacity"
-                                onMouseDown={(e) =>
-                                    onDragStart(e, event, "resize-start")
-                                }
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    onDragStart(e, event, "resize-start");
+                                }}
                             >
                                 <GripVertical
                                     size={10}
@@ -148,9 +163,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                             </div>
                             <div
                                 className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-black/10 z-20 flex items-center justify-center opacity-0 group-hover/event:opacity-100 transition-opacity"
-                                onMouseDown={(e) =>
-                                    onDragStart(e, event, "resize-end")
-                                }
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    onDragStart(e, event, "resize-end");
+                                }}
                             >
                                 <GripVertical
                                     size={10}
@@ -165,11 +181,11 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                     </div>
                     <div className="mt-auto flex items-baseline justify-between pointer-events-none">
                         <div className="text-[10px] font-medium opacity-90">
-                            {event.startDate}
+                            {startDateLabel}
                         </div>
-                        {event.endDate && event.endDate !== event.startDate && (
+                        {showEndDate && (
                             <div className="text-[10px] opacity-75">
-                                → {event.endDate}
+                                → {endDateLabel}
                             </div>
                         )}
                     </div>
