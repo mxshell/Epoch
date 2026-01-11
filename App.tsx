@@ -1,28 +1,10 @@
 import React, {
-    useState,
     useEffect,
-    useRef,
-    useMemo,
-    useCallback,
     useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
-import {
-    Plus,
-    ZoomIn,
-    ZoomOut,
-    Download,
-    Upload,
-    Settings,
-    Trash2,
-    Edit2,
-    Calendar,
-    Sparkles,
-    ChevronLeft,
-    ChevronRight,
-    Menu,
-    GripVertical,
-    Search,
-} from "lucide-react";
 import {
     ITrack,
     IEvent,
@@ -51,32 +33,12 @@ import {
     addYears,
     addHours,
 } from "./utils/dateUtils";
-import { Modal } from "./components/Modal";
-import { Button } from "./components/Button";
-
-// -- Sub-components --
-
-const ColorPicker: React.FC<{
-    selected: string;
-    onChange: (c: string) => void;
-}> = ({ selected, onChange }) => (
-    <div className="flex flex-wrap gap-2 mt-2">
-        {COLOR_PALETTE.map((c) => (
-            <button
-                key={c}
-                type="button"
-                onClick={() => onChange(c)}
-                className={`w-8 h-8 rounded-full border-2 transition-transform ${
-                    selected === c
-                        ? "border-slate-600 scale-110 shadow-sm"
-                        : "border-transparent hover:scale-105"
-                }`}
-                style={{ backgroundColor: c }}
-                aria-label={`Select color ${c}`}
-            />
-        ))}
-    </div>
-);
+import { AppHeader } from "./components/AppHeader";
+import { TrackSidebar } from "./components/TrackSidebar";
+import { TimelineCanvas } from "./components/TimelineCanvas";
+import { TrackModal } from "./components/TrackModal";
+import { EventModal } from "./components/EventModal";
+import { DataModal } from "./components/DataModal";
 
 // -- Main App Component --
 
@@ -433,6 +395,12 @@ export default function App() {
         wasPanningRef.current = false;
     };
 
+    const handleCloseModal = () => {
+        setActiveModal(ModalType.NONE);
+        setEditingTrack(null);
+        setEditingEvent(null);
+    };
+
     const handleAddTrack = () => {
         setEditingTrack({
             id: crypto.randomUUID(),
@@ -462,7 +430,7 @@ export default function App() {
             }
             return { ...prev, tracks: [...prev.tracks, editingTrack] };
         });
-        setActiveModal(ModalType.NONE);
+        handleCloseModal();
     };
 
     const handleDeleteTrack = () => {
@@ -476,7 +444,7 @@ export default function App() {
                     (e) => e.trackId !== editingTrack.id
                 ),
             }));
-            setActiveModal(ModalType.NONE);
+            handleCloseModal();
         }
     };
 
@@ -513,7 +481,7 @@ export default function App() {
             }
             return { ...prev, events: [...prev.events, editingEvent] };
         });
-        setActiveModal(ModalType.NONE);
+        handleCloseModal();
     };
 
     const handleDeleteEvent = () => {
@@ -522,7 +490,7 @@ export default function App() {
             ...prev,
             events: prev.events.filter((e) => e.id !== editingEvent.id),
         }));
-        setActiveModal(ModalType.NONE);
+        handleCloseModal();
     };
 
     const handleExport = () => {
@@ -553,6 +521,13 @@ export default function App() {
                 }
             };
             reader.readAsText(file);
+        }
+    };
+
+    const handleResetTimeline = () => {
+        if (confirm("Are you sure? This cannot be undone.")) {
+            setData({ tracks: [], events: [] });
+            handleCloseModal();
         }
     };
 
@@ -919,85 +894,36 @@ export default function App() {
         );
     };
 
+    const timeScale = useMemo(
+        () => renderTimeScale(),
+        [timelineRange, pixelsPerDay]
+    );
+    const gridLines = useMemo(
+        () => renderGridLines(),
+        [timelineRange, pixelsPerDay]
+    );
+    const dragGuideOverlay = useMemo(
+        () => renderDragGuides(),
+        [dragState, pixelsPerDay, timelineRange]
+    );
+
+    const isTrackModalOpen = activeModal === ModalType.EDIT_TRACK;
+    const isEventModalOpen = activeModal === ModalType.EDIT_EVENT;
+    const isDataModalOpen = activeModal === ModalType.IMPORT_EXPORT;
+
     return (
         <div className="flex flex-col h-screen bg-slate-50 select-none text-slate-800 font-sans">
-            {/* Refined Header */}
-            <header className="h-16 flex items-center justify-between px-6 bg-white/80 backdrop-blur-md z-40 border-b border-slate-200/60 sticky top-0 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-gradient-to-br from-brand-600 to-brand-700 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/30 ring-1 ring-white/20">
-                        <Calendar size={18} strokeWidth={2.5} />
-                    </div>
-                    <div>
-                        <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-none">
-                            ChronoCraft
-                        </h1>
-                        <span className="text-[10px] font-medium text-slate-400 tracking-wider uppercase">
-                            Timeline Editor
-                        </span>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    {/* <Button variant="ghost" size="sm" onClick={() => setActiveModal(ModalType.AI_GENERATE)} 
-              className="text-brand-600 bg-brand-50 hover:bg-brand-100 hover:text-brand-700 border border-brand-100" 
-              icon={<Sparkles size={16}/>}>
-            AI Assist
-          </Button> */}
-
-                    <div className="h-8 w-px bg-slate-200 mx-1" />
-
-                    <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200/50">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleZoom("out")}
-                            disabled={zoomIndex === 0}
-                            className="h-7 w-8 p-0 rounded-md hover:bg-white hover:shadow-sm"
-                        >
-                            <ZoomOut size={16} />
-                        </Button>
-                        <span className="text-[10px] font-medium text-slate-500 w-14 text-center tabular-nums">
-                            {Math.round(pixelsPerDay)} px/d
-                        </span>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleZoom("in")}
-                            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
-                            className="h-7 w-8 p-0 rounded-md hover:bg-white hover:shadow-sm"
-                        >
-                            <ZoomIn size={16} />
-                        </Button>
-                    </div>
-
-                    <div className="h-8 w-px bg-slate-200 mx-1" />
-
-                    <div className="flex gap-2">
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={handleAddTrack}
-                            icon={<Plus size={16} />}
-                            className="shadow-brand-500/20 shadow-lg"
-                        >
-                            Track
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() =>
-                                setActiveModal(ModalType.IMPORT_EXPORT)
-                            }
-                            icon={<Settings size={16} />}
-                        >
-                            Data
-                        </Button>
-                    </div>
-                </div>
-            </header>
+            <AppHeader
+                pixelsPerDay={pixelsPerDay}
+                zoomIndex={zoomIndex}
+                zoomLevelsLength={ZOOM_LEVELS.length}
+                onZoomIn={() => handleZoom("in")}
+                onZoomOut={() => handleZoom("out")}
+                onAddTrack={handleAddTrack}
+                onOpenData={() => setActiveModal(ModalType.IMPORT_EXPORT)}
+            />
 
             <div className="flex-1 overflow-hidden relative flex flex-col cursor-default">
-                {/* Sticky Time Header */}
                 <div className="h-12 bg-white/90 backdrop-blur-sm border-b border-slate-200 shrink-0 overflow-hidden relative z-30 shadow-sm">
                     <div className="w-56 h-full border-r border-slate-200 absolute left-0 top-0 bg-slate-50/50 flex items-center px-6 text-xs font-bold text-slate-400 tracking-wider uppercase">
                         Tracks
@@ -1005,683 +931,61 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Fixed Sidebar */}
-                    <div className="w-56 shrink-0 bg-white/50 backdrop-blur-sm z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col pt-0 border-r border-slate-100">
-                        {data.tracks.map((track) => (
-                            <div
-                                key={track.id}
-                                className="h-32 p-4 flex flex-col justify-between group hover:bg-slate-50/80 transition-all border-b border-slate-50 relative"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div
-                                        className="w-1 h-8 rounded-full shrink-0"
-                                        style={{ backgroundColor: track.color }}
-                                    ></div>
-                                    <div className="overflow-hidden">
-                                        <h3
-                                            className="font-semibold text-slate-700 truncate leading-tight"
-                                            title={track.title}
-                                        >
-                                            {track.title}
-                                        </h3>
-                                        <div className="text-[10px] text-slate-400 mt-1">
-                                            {
-                                                data.events.filter(
-                                                    (e) =>
-                                                        e.trackId === track.id
-                                                ).length
-                                            }{" "}
-                                            events
-                                        </div>
-                                    </div>
-                                </div>
+                    <TrackSidebar
+                        tracks={data.tracks}
+                        events={data.events}
+                        onAddTrack={handleAddTrack}
+                        onEditTrack={handleEditTrack}
+                    />
 
-                                <div className="flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-brand-600"
-                                        onClick={() => handleEditTrack(track)}
-                                    >
-                                        Edit
-                                    </Button>
-                                    <div className="text-[10px] text-slate-300 font-mono">
-                                        #{track.order + 1}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="p-4">
-                            <Button
-                                variant="ghost"
-                                className="w-full h-12 border-dashed border-2 border-slate-200 text-slate-400 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50/50 rounded-xl transition-all"
-                                onClick={handleAddTrack}
-                            >
-                                <Plus size={20} />
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Scrollable Timeline */}
-                    <div
-                        id="timeline-scroll-container"
-                        ref={scrollContainerRef}
-                        className={`flex-1 overflow-x-auto overflow-y-auto timeline-scroll bg-slate-50/30 relative 
-               ${isPanning ? "cursor-grabbing" : "cursor-grab"}
-            `}
-                        onMouseDown={handleCanvasMouseDown}
-                        onWheel={handleWheelZoom}
-                    >
-                        <div
-                            style={{
-                                width: `${totalWidth}px`,
-                                minHeight: "100%",
-                            }}
-                            className="relative"
-                        >
-                            {/* Time Scale - Now sticky and taller */}
-                            <div className="h-12 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-10 w-full">
-                                {renderTimeScale()}
-                            </div>
-
-                            <div className="absolute inset-0 z-0 pointer-events-none mt-12">
-                                {renderGridLines()}
-                            </div>
-
-                            {renderDragGuides()}
-
-                            <div className="flex flex-col relative z-0">
-                                {data.tracks.map((track) => {
-                                    const isTargetTrack =
-                                        dragState.isDragging &&
-                                        dragState.targetTrackId === track.id;
-                                    return (
-                                        <div
-                                            key={track.id}
-                                            data-track-id={track.id}
-                                            className={`h-32 border-b border-slate-100 relative group transition-colors 
-                        ${
-                            isTargetTrack
-                                ? "bg-brand-50/40"
-                                : "hover:bg-white/40"
-                        }`}
-                                            onDoubleClick={(e) =>
-                                                handleTrackDoubleClick(
-                                                    e,
-                                                    track.id
-                                                )
-                                            }
-                                        >
-                                            {/* Hover hint for double click */}
-                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-10 pointer-events-none">
-                                                <div className="flex items-center gap-1 text-slate-400 text-xs">
-                                                    <Plus size={12} />{" "}
-                                                    Double-click to add event
-                                                </div>
-                                            </div>
-
-                                            {data.events
-                                                .filter(
-                                                    (e) =>
-                                                        e.trackId === track.id
-                                                )
-                                                .map((event) => {
-                                                    const isDraggingThis =
-                                                        dragState.isDragging &&
-                                                        dragState.eventId ===
-                                                            event.id;
-                                                    let style: React.CSSProperties =
-                                                        getEventStyle(event);
-
-                                                    if (isDraggingThis) {
-                                                        const deltaX =
-                                                            dragState.currentX -
-                                                            dragState.startX;
-                                                        const deltaY =
-                                                            dragState.currentY -
-                                                            dragState.startY;
-
-                                                        if (
-                                                            dragState.mode ===
-                                                            "move"
-                                                        ) {
-                                                            style = {
-                                                                ...style,
-                                                                transform: `translate(${deltaX}px, ${deltaY}px)`,
-                                                                zIndex: 50,
-                                                                cursor: "grabbing",
-                                                                pointerEvents:
-                                                                    "none",
-                                                                boxShadow:
-                                                                    "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-                                                                opacity: 0.95,
-                                                                scale: "1.02",
-                                                            };
-                                                        } else if (
-                                                            dragState.mode ===
-                                                            "resize-start"
-                                                        ) {
-                                                            const originalLeft =
-                                                                parseFloat(
-                                                                    style.left as string
-                                                                );
-                                                            const originalWidth =
-                                                                parseFloat(
-                                                                    style.width as string
-                                                                );
-                                                            style = {
-                                                                ...style,
-                                                                left: `${
-                                                                    originalLeft +
-                                                                    deltaX
-                                                                }px`,
-                                                                width: `${Math.max(
-                                                                    pixelsPerDay,
-                                                                    originalWidth -
-                                                                        deltaX
-                                                                )}px`,
-                                                                zIndex: 50,
-                                                                cursor: "ew-resize",
-                                                            };
-                                                        } else if (
-                                                            dragState.mode ===
-                                                            "resize-end"
-                                                        ) {
-                                                            const originalWidth =
-                                                                parseFloat(
-                                                                    style.width as string
-                                                                );
-                                                            style = {
-                                                                ...style,
-                                                                width: `${Math.max(
-                                                                    pixelsPerDay,
-                                                                    originalWidth +
-                                                                        deltaX
-                                                                )}px`,
-                                                                zIndex: 50,
-                                                                cursor: "ew-resize",
-                                                            };
-                                                        }
-                                                    }
-
-                                                    const {
-                                                        backgroundColor,
-                                                        ...wrapperStyle
-                                                    } = style;
-
-                                                    return (
-                                                        <div
-                                                            key={event.id}
-                                                            className={`absolute top-4 h-20 group/event ${
-                                                                !isDraggingThis
-                                                                    ? "z-10 cursor-grab"
-                                                                    : ""
-                                                            }`}
-                                                            style={wrapperStyle}
-                                                            onMouseDown={(e) =>
-                                                                handleDragStart(
-                                                                    e,
-                                                                    event,
-                                                                    "move"
-                                                                )
-                                                            }
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleEditEvent(
-                                                                    event
-                                                                );
-                                                            }}
-                                                            title={`${event.title}`}
-                                                        >
-                                                            <div
-                                                                className={`w-full h-full rounded-xl shadow-sm border border-black/5 px-3 py-2 flex flex-col overflow-hidden text-white transition-all duration-200 ease-out relative
-                                    ${
-                                        !isDraggingThis
-                                            ? "hover:shadow-md hover:-translate-y-0.5 hover:brightness-[1.03]"
-                                            : ""
-                                    }
-                                `}
-                                                                style={{
-                                                                    backgroundColor,
-                                                                }}
-                                                            >
-                                                                {/* Glossy highlight */}
-                                                                <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
-
-                                                                {!dragState.isDragging && (
-                                                                    <>
-                                                                        <div
-                                                                            className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-black/10 z-20 flex items-center justify-center opacity-0 group-hover/event:opacity-100 transition-opacity"
-                                                                            onMouseDown={(
-                                                                                e
-                                                                            ) =>
-                                                                                handleDragStart(
-                                                                                    e,
-                                                                                    event,
-                                                                                    "resize-start"
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <GripVertical
-                                                                                size={
-                                                                                    10
-                                                                                }
-                                                                                className="text-white/70"
-                                                                            />
-                                                                        </div>
-                                                                        <div
-                                                                            className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-black/10 z-20 flex items-center justify-center opacity-0 group-hover/event:opacity-100 transition-opacity"
-                                                                            onMouseDown={(
-                                                                                e
-                                                                            ) =>
-                                                                                handleDragStart(
-                                                                                    e,
-                                                                                    event,
-                                                                                    "resize-end"
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <GripVertical
-                                                                                size={
-                                                                                    10
-                                                                                }
-                                                                                className="text-white/70"
-                                                                            />
-                                                                        </div>
-                                                                    </>
-                                                                )}
-
-                                                                <div className="font-semibold text-sm truncate pointer-events-none drop-shadow-sm">
-                                                                    {
-                                                                        event.title
-                                                                    }
-                                                                </div>
-                                                                <div className="mt-auto flex items-baseline justify-between pointer-events-none">
-                                                                    <div className="text-[10px] font-medium opacity-90">
-                                                                        {
-                                                                            event.startDate
-                                                                        }
-                                                                    </div>
-                                                                    {event.endDate && (
-                                                                        <div className="text-[10px] opacity-75">
-                                                                            →
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
+                    <TimelineCanvas
+                        tracks={data.tracks}
+                        events={data.events}
+                        dragState={dragState}
+                        isPanning={isPanning}
+                        totalWidth={totalWidth}
+                        pixelsPerDay={pixelsPerDay}
+                        scrollContainerRef={scrollContainerRef}
+                        onCanvasMouseDown={handleCanvasMouseDown}
+                        onWheelZoom={handleWheelZoom}
+                        onTrackDoubleClick={handleTrackDoubleClick}
+                        onDragStart={handleDragStart}
+                        onEditEvent={handleEditEvent}
+                        timeScale={timeScale}
+                        gridLines={gridLines}
+                        dragGuides={dragGuideOverlay}
+                        getEventStyle={getEventStyle}
+                    />
                 </div>
             </div>
 
-            <Modal
-                isOpen={activeModal === ModalType.EDIT_TRACK}
-                onClose={() => setActiveModal(ModalType.NONE)}
-                title={editingTrack?.id === "new" ? "New Track" : "Edit Track"}
-                footer={
-                    <>
-                        {editingTrack?.id &&
-                            data.tracks.find(
-                                (t) => t.id === editingTrack.id
-                            ) && (
-                                <Button
-                                    variant="danger"
-                                    onClick={handleDeleteTrack}
-                                    className="mr-auto"
-                                >
-                                    Delete
-                                </Button>
-                            )}
-                        <Button
-                            variant="secondary"
-                            onClick={() => setActiveModal(ModalType.NONE)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveTrack}>Save Track</Button>
-                    </>
-                }
-            >
-                <div className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Track Title
-                        </label>
-                        <input
-                            type="text"
-                            className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            value={editingTrack?.title || ""}
-                            onChange={(e) =>
-                                setEditingTrack((prev) =>
-                                    prev
-                                        ? { ...prev, title: e.target.value }
-                                        : null
-                                )
-                            }
-                            placeholder="e.g., Marketing Projects"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Color Theme
-                        </label>
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                            <ColorPicker
-                                selected={editingTrack?.color || "#3b82f6"}
-                                onChange={(c) =>
-                                    setEditingTrack((prev) =>
-                                        prev ? { ...prev, color: c } : null
-                                    )
-                                }
-                            />
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-
-            <Modal
-                isOpen={activeModal === ModalType.EDIT_EVENT}
-                onClose={() => setActiveModal(ModalType.NONE)}
-                title="Edit Event"
-                footer={
-                    <>
-                        <Button
-                            variant="danger"
-                            onClick={handleDeleteEvent}
-                            className="mr-auto"
-                        >
-                            Delete
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            onClick={() => setActiveModal(ModalType.NONE)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveEvent}>Save Event</Button>
-                    </>
-                }
-            >
-                <div className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Event Title
-                        </label>
-                        <input
-                            type="text"
-                            className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            value={editingEvent?.title || ""}
-                            onChange={(e) =>
-                                setEditingEvent((prev) =>
-                                    prev
-                                        ? { ...prev, title: e.target.value }
-                                        : null
-                                )
-                            }
-                            placeholder="What happened?"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Start Date
-                            </label>
-                            <input
-                                type="date"
-                                className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                                value={editingEvent?.startDate || ""}
-                                onChange={(e) =>
-                                    setEditingEvent((prev) =>
-                                        prev
-                                            ? {
-                                                  ...prev,
-                                                  startDate: e.target.value,
-                                              }
-                                            : null
-                                    )
-                                }
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                End Date{" "}
-                                <span className="text-slate-400 font-normal normal-case">
-                                    (Optional)
-                                </span>
-                            </label>
-                            <input
-                                type="date"
-                                className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                                value={editingEvent?.endDate || ""}
-                                min={editingEvent?.startDate}
-                                onChange={(e) =>
-                                    setEditingEvent((prev) =>
-                                        prev
-                                            ? {
-                                                  ...prev,
-                                                  endDate: e.target.value,
-                                              }
-                                            : null
-                                    )
-                                }
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Description
-                        </label>
-                        <textarea
-                            className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all resize-none"
-                            rows={3}
-                            value={editingEvent?.description || ""}
-                            onChange={(e) =>
-                                setEditingEvent((prev) =>
-                                    prev
-                                        ? {
-                                              ...prev,
-                                              description: e.target.value,
-                                          }
-                                        : null
-                                )
-                            }
-                            placeholder="Add details..."
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Track
-                            </label>
-                            <select
-                                className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                                value={editingEvent?.trackId || ""}
-                                onChange={(e) =>
-                                    setEditingEvent((prev) =>
-                                        prev
-                                            ? {
-                                                  ...prev,
-                                                  trackId: e.target.value,
-                                              }
-                                            : null
-                                    )
-                                }
-                            >
-                                {data.tracks.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.title}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Event Color
-                            </label>
-                            <div className="h-[42px] flex items-center">
-                                <ColorPicker
-                                    selected={editingEvent?.color || "#3b82f6"}
-                                    onChange={(c) =>
-                                        setEditingEvent((prev) =>
-                                            prev ? { ...prev, color: c } : null
-                                        )
-                                    }
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* <Modal
-        isOpen={activeModal === ModalType.AI_GENERATE}
-        onClose={() => setActiveModal(ModalType.NONE)}
-        title="AI Timeline Generator"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setActiveModal(ModalType.NONE)}>Cancel</Button>
-            <Button onClick={handleGenerateAI} disabled={isGenerating || !aiPrompt.trim()}>
-              {isGenerating ? 'Dreaming...' : 'Generate Timeline'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="bg-gradient-to-br from-brand-50 to-white border border-brand-100 rounded-xl p-5 flex items-start gap-4 shadow-sm">
-             <div className="p-2 bg-brand-100 rounded-lg text-brand-600">
-                <Sparkles size={20} />
-             </div>
-             <div className="text-sm text-slate-600 leading-relaxed">
-               <strong className="text-brand-800 block mb-1">Unleash your creativity</strong>
-               Enter any historical event, project plan, or biography. Our AI will structure tracks and events instantly.
-             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Topic Prompt</label>
-            <input
-              type="text"
-              placeholder="e.g. The Evolution of Video Games"
-              className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-3 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              autoFocus
+            <TrackModal
+                isOpen={isTrackModalOpen}
+                editingTrack={editingTrack}
+                onClose={handleCloseModal}
+                onChange={(track) => setEditingTrack(track)}
+                onSave={handleSaveTrack}
+                onDelete={handleDeleteTrack}
+                tracks={data.tracks}
             />
-          </div>
-          {aiError && (
-             <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
-               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-               {aiError}
-             </div>
-          )}
-        </div>
-      </Modal> */}
 
-            <Modal
-                isOpen={activeModal === ModalType.IMPORT_EXPORT}
-                onClose={() => setActiveModal(ModalType.NONE)}
-                title="Data Management"
-                footer={
-                    <Button onClick={() => setActiveModal(ModalType.NONE)}>
-                        Close
-                    </Button>
-                }
-            >
-                <div className="space-y-6">
-                    <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="p-2 bg-white rounded-lg border border-slate-100 shadow-sm text-slate-600">
-                                <Download size={18} />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 text-sm">
-                                    Export Data
-                                </h3>
-                                <p className="text-xs text-slate-500">
-                                    Save your timeline as a JSON file.
-                                </p>
-                            </div>
-                        </div>
-                        <Button
-                            onClick={handleExport}
-                            className="w-full justify-center"
-                        >
-                            Download JSON
-                        </Button>
-                    </div>
+            <EventModal
+                isOpen={isEventModalOpen}
+                editingEvent={editingEvent}
+                tracks={data.tracks}
+                onClose={handleCloseModal}
+                onChange={(event) => setEditingEvent(event)}
+                onSave={handleSaveEvent}
+                onDelete={handleDeleteEvent}
+            />
 
-                    <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="p-2 bg-white rounded-lg border border-slate-100 shadow-sm text-slate-600">
-                                <Upload size={18} />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 text-sm">
-                                    Import Data
-                                </h3>
-                                <p className="text-xs text-slate-500">
-                                    Restore from a backup file.
-                                </p>
-                            </div>
-                        </div>
-                        <label className="block">
-                            <span className="sr-only">Choose file</span>
-                            <input
-                                type="file"
-                                accept=".json"
-                                onChange={handleImport}
-                                className="block w-full text-sm text-slate-500
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-xs file:font-semibold
-                  file:bg-brand-50 file:text-brand-700
-                  hover:file:bg-brand-100
-                  cursor-pointer
-                "
-                            />
-                        </label>
-                    </div>
-
-                    <div className="border border-red-100 bg-red-50/50 rounded-xl p-5">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="p-2 bg-white rounded-lg border border-red-100 shadow-sm text-red-500">
-                                <Trash2 size={18} />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 text-sm">
-                                    Reset Timeline
-                                </h3>
-                                <p className="text-xs text-slate-500">
-                                    Clear all tracks and events.
-                                </p>
-                            </div>
-                        </div>
-                        <Button
-                            variant="danger"
-                            size="sm"
-                            className="w-full justify-center"
-                            onClick={() => {
-                                if (
-                                    confirm(
-                                        "Are you sure? This cannot be undone."
-                                    )
-                                ) {
-                                    setData({ tracks: [], events: [] });
-                                    setActiveModal(ModalType.NONE);
-                                }
-                            }}
-                        >
-                            Clear Everything
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+            <DataModal
+                isOpen={isDataModalOpen}
+                onClose={handleCloseModal}
+                onExport={handleExport}
+                onImport={handleImport}
+                onReset={handleResetTimeline}
+            />
         </div>
     );
 }
