@@ -1,29 +1,35 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { Button } from "./Button";
-import { IEvent, ITrack } from "../types";
+import { ITrack } from "../types";
+import { TrackLaneInfo, getTrackHeight } from "../utils/eventLanes";
 
 type TrackSidebarProps = {
     tracks: ITrack[];
-    events: IEvent[];
+    trackLaneInfo: Map<string, TrackLaneInfo>;
     onAddTrack: () => void;
     onEditTrack: (track: ITrack) => void;
 };
 
-const getEventCount = (trackId: string, events: IEvent[]) =>
-    events.filter((e) => e.trackId === trackId).length;
-
 export const TrackSidebar: React.FC<TrackSidebarProps> = ({
     tracks,
-    events,
+    trackLaneInfo,
     onAddTrack,
     onEditTrack,
 }) => (
-    <div className="w-56 shrink-0 bg-white/50 backdrop-blur-sm z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col pt-0 border-r border-slate-100">
-        {tracks.map((track) => (
+    <div className="w-56 shrink-0 bg-white/50 backdrop-blur-sm z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex flex-col border-r border-slate-100 overflow-y-auto">
+        {/* Spacer to match TimelineCanvas time scale header */}
+        <div className="h-12 shrink-0 sticky top-0 bg-white/90 backdrop-blur-md border-b border-slate-200 z-10" />
+        {tracks.map((track) => {
+            const laneInfo = trackLaneInfo.get(track.id);
+            const trackHeight = laneInfo ? getTrackHeight(laneInfo.maxLanes) : getTrackHeight(1);
+            const eventCount = laneInfo?.events.length || 0;
+            
+            return (
             <div
                 key={track.id}
-                className="h-32 p-4 flex flex-col justify-between group hover:bg-slate-50/80 transition-all border-b border-slate-50 relative"
+                className="p-4 flex flex-col justify-between group hover:bg-slate-50/80 transition-all border-b border-slate-50 relative"
+                style={{ height: `${trackHeight}px` }}
             >
                 <div className="flex items-start gap-3">
                     <div
@@ -38,7 +44,7 @@ export const TrackSidebar: React.FC<TrackSidebarProps> = ({
                             {track.title}
                         </h3>
                         <div className="text-[10px] text-slate-400 mt-1">
-                            {getEventCount(track.id, events)} events
+                            {eventCount} events
                         </div>
                     </div>
                 </div>
@@ -57,7 +63,8 @@ export const TrackSidebar: React.FC<TrackSidebarProps> = ({
                     </div>
                 </div>
             </div>
-        ))}
+        );
+        })}
         <div className="p-4">
             <Button
                 variant="ghost"

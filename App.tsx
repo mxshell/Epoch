@@ -12,6 +12,7 @@ import {
     ModalType,
     IDragState,
     DragMode,
+    IViewBounds,
 } from "./types";
 import {
     DEFAULT_EVENTS,
@@ -39,6 +40,7 @@ import { TimelineCanvas } from "./components/TimelineCanvas";
 import { TrackModal } from "./components/TrackModal";
 import { EventModal } from "./components/EventModal";
 import { DataModal } from "./components/DataModal";
+import { calculateTrackLanes } from "./utils/eventLanes";
 
 // -- Main App Component --
 
@@ -100,31 +102,45 @@ export default function App() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
 
-    // View Calculation
+    // View Calculation / Settings
     const pixelsPerDay = ZOOM_LEVELS[zoomIndex];
+    const clampYear = (year: number) => Math.min(2100, Math.max(1900, year));
+
+    const [viewBounds, setViewBounds] = useState<IViewBounds>(() => {
+        const saved = localStorage.getItem("chrono_bounds");
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (
+                    typeof parsed.minYear === "number" &&
+                    typeof parsed.maxYear === "number"
+                ) {
+                    return {
+                        minYear: clampYear(parsed.minYear),
+                        maxYear: clampYear(parsed.maxYear),
+                    };
+                }
+            } catch {
+                // fall through to defaults
+            }
+        }
+        return { minYear: 2020, maxYear: 2030 };
+    });
+    const [boundsDraft, setBoundsDraft] = useState<IViewBounds>(() => ({
+        minYear: 2020,
+        maxYear: 2030,
+    }));
 
     const timelineRange = useMemo(() => {
-        if (data.events.length === 0) {
-            const now = new Date();
-            return { min: addDays(now, -365), max: addDays(now, 365) };
+        const minYearDate = new Date(viewBounds.minYear, 0, 1);
+        const maxYearDate = new Date(viewBounds.maxYear, 11, 31);
+        // Always honor user-defined bounds as the visible canvas limits
+        if (minYearDate >= maxYearDate) {
+            const safeMax = addYears(minYearDate, 1);
+            return { min: minYearDate, max: safeMax };
         }
-        const dates = data.events.flatMap((e) => [
-            parseDate(e.startDate).getTime(),
-            e.endDate
-                ? parseDate(e.endDate).getTime()
-                : parseDate(e.startDate).getTime(),
-        ]);
-        const minTime = Math.min(...dates);
-        const maxTime = Math.max(...dates);
-
-        // Add dynamic buffer based on zoom level to ensure screen is filled
-        const bufferDays = 365 / (pixelsPerDay > 10 ? pixelsPerDay : 0.5);
-
-        return {
-            min: addDays(new Date(minTime), -Math.max(30, bufferDays)),
-            max: addDays(new Date(maxTime), Math.max(30, bufferDays)),
-        };
-    }, [data.events, pixelsPerDay]);
+        return { min: minYearDate, max: maxYearDate };
+    }, [viewBounds]);
 
     const totalDays = getDaysDiff(timelineRange.min, timelineRange.max);
     const totalWidth = totalDays * pixelsPerDay;
@@ -134,6 +150,10 @@ export default function App() {
         localStorage.setItem("chrono_data", JSON.stringify(data));
         dataRef.current = data;
     }, [data]);
+
+    useEffect(() => {
+        localStorage.setItem("chrono_bounds", JSON.stringify(viewBounds));
+    }, [viewBounds]);
 
     useEffect(() => {
         zoomIndexRef.current = zoomIndex;
@@ -200,6 +220,7 @@ export default function App() {
 
             // Event Dragging Logic (Existing)
             if (dragStateRef.current.isDragging) {
+                e.preventDefault(); // Prevent text selection during drag
                 const state = dragStateRef.current;
                 let targetId = state.targetTrackId;
                 if (state.mode === "move") {
@@ -361,7 +382,7 @@ export default function App() {
         mode: DragMode
     ) => {
         e.stopPropagation();
-        e.preventDefault();
+        // Note: Don't call e.preventDefault() here as it blocks double-click events
 
         setDragState({
             isDragging: true,
@@ -399,6 +420,8 @@ export default function App() {
         setActiveModal(ModalType.NONE);
         setEditingTrack(null);
         setEditingEvent(null);
+        // Reset drafts to persisted view bounds on close
+        setBoundsDraft(viewBounds);
     };
 
     const handleAddTrack = () => {
@@ -449,11 +472,14 @@ export default function App() {
     };
 
     const handleAddEvent = (trackId: string, dateStr?: string) => {
+        const startDate = dateStr ? parseDate(dateStr) : new Date();
+        const endDate = addDays(startDate, 7); // Default 7-day duration
         setEditingEvent({
             id: crypto.randomUUID(),
             trackId,
             title: "New Event",
-            startDate: dateStr || formatDate(new Date()),
+            startDate: formatDate(startDate),
+            endDate: formatDate(endDate),
             color:
                 data.tracks.find((t) => t.id === trackId)?.color ||
                 COLOR_PALETTE[6],
@@ -469,17 +495,22 @@ export default function App() {
 
     const handleSaveEvent = () => {
         if (!editingEvent) return;
+        // Ensure endDate is always set (default to startDate if empty)
+        const eventToSave = {
+            ...editingEvent,
+            endDate: editingEvent.endDate || editingEvent.startDate,
+        };
         setData((prev) => {
-            const exists = prev.events.find((e) => e.id === editingEvent.id);
+            const exists = prev.events.find((e) => e.id === eventToSave.id);
             if (exists) {
                 return {
                     ...prev,
                     events: prev.events.map((e) =>
-                        e.id === editingEvent.id ? editingEvent : e
+                        e.id === eventToSave.id ? eventToSave : e
                     ),
                 };
             }
-            return { ...prev, events: [...prev.events, editingEvent] };
+            return { ...prev, events: [...prev.events, eventToSave] };
         });
         handleCloseModal();
     };
@@ -529,6 +560,24 @@ export default function App() {
             setData({ tracks: [], events: [] });
             handleCloseModal();
         }
+    };
+    const handleBoundsDraftChange = (bounds: {
+        minYear: number;
+        maxYear: number;
+    }) => {
+        const minYear = clampYear(Math.floor(bounds.minYear));
+        const maxYear = clampYear(Math.floor(bounds.maxYear));
+        if (Number.isNaN(minYear) || Number.isNaN(maxYear)) return;
+        const safeMin = Math.min(minYear, maxYear - 1);
+        const safeMax = Math.max(maxYear, safeMin + 1);
+        setBoundsDraft({ minYear: safeMin, maxYear: safeMax });
+    };
+
+    const handleSaveBounds = () => {
+        setViewBounds({
+            minYear: clampYear(boundsDraft.minYear),
+            maxYear: clampYear(boundsDraft.maxYear),
+        });
     };
 
     const handleTrackDoubleClick = (e: React.MouseEvent, trackId: string) => {
@@ -907,6 +956,16 @@ export default function App() {
         [dragState, pixelsPerDay, timelineRange]
     );
 
+    // Calculate lane assignments for overlapping events
+    const trackLaneInfo = useMemo(
+        () =>
+            calculateTrackLanes(
+                data.events,
+                data.tracks.map((t) => t.id)
+            ),
+        [data.events, data.tracks]
+    );
+
     const isTrackModalOpen = activeModal === ModalType.EDIT_TRACK;
     const isEventModalOpen = activeModal === ModalType.EDIT_EVENT;
     const isDataModalOpen = activeModal === ModalType.IMPORT_EXPORT;
@@ -919,28 +978,24 @@ export default function App() {
                 zoomLevelsLength={ZOOM_LEVELS.length}
                 onZoomIn={() => handleZoom("in")}
                 onZoomOut={() => handleZoom("out")}
-                onAddTrack={handleAddTrack}
-                onOpenData={() => setActiveModal(ModalType.IMPORT_EXPORT)}
+                onOpenData={() => {
+                    setBoundsDraft(viewBounds);
+                    setActiveModal(ModalType.IMPORT_EXPORT);
+                }}
             />
 
             <div className="flex-1 overflow-hidden relative flex flex-col cursor-default">
-                <div className="h-12 bg-white/90 backdrop-blur-sm border-b border-slate-200 shrink-0 overflow-hidden relative z-30 shadow-sm">
-                    <div className="w-56 h-full border-r border-slate-200 absolute left-0 top-0 bg-slate-50/50 flex items-center px-6 text-xs font-bold text-slate-400 tracking-wider uppercase">
-                        Tracks
-                    </div>
-                </div>
-
                 <div className="flex-1 flex overflow-hidden">
                     <TrackSidebar
                         tracks={data.tracks}
-                        events={data.events}
+                        trackLaneInfo={trackLaneInfo}
                         onAddTrack={handleAddTrack}
                         onEditTrack={handleEditTrack}
                     />
 
                     <TimelineCanvas
                         tracks={data.tracks}
-                        events={data.events}
+                        trackLaneInfo={trackLaneInfo}
                         dragState={dragState}
                         isPanning={isPanning}
                         totalWidth={totalWidth}
@@ -985,6 +1040,10 @@ export default function App() {
                 onExport={handleExport}
                 onImport={handleImport}
                 onReset={handleResetTimeline}
+                minYear={boundsDraft.minYear}
+                maxYear={boundsDraft.maxYear}
+                onBoundsChange={handleBoundsDraftChange}
+                onSaveBounds={handleSaveBounds}
             />
         </div>
     );

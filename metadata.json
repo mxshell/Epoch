@@ -1,5 +1,5 @@
 {
-  "name": "ChronoCraft",
+  "name": "TimeLiner",
   "description": "A powerful, client-side timeline editor with AI generation capabilities. Create, visualize, and manage parallel event tracks interactively.",
   "requestFramePermissions": []
 }

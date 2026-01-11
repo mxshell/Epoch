@@ -11,7 +11,7 @@ export interface IEvent {
   title: string;
   description?: string;
   startDate: string; // ISO Date string YYYY-MM-DD
-  endDate?: string; // ISO Date string YYYY-MM-DD
+  endDate: string; // ISO Date string YYYY-MM-DD (same as startDate for single-day events)
   color?: string;
 }
 
@@ -24,6 +24,11 @@ export interface IViewSettings {
   zoom: number; // Pixels per day
   minDate: Date;
   maxDate: Date;
+}
+
+export interface IViewBounds {
+  minYear: number;
+  maxYear: number;
 }
 
 export enum ModalType {

@@ -66,20 +66,22 @@ export const EventModal: React.FC<EventModalProps> = ({
                             type="date"
                             className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
                             value={editingEvent.startDate || ""}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                                const newStartDate = e.target.value;
+                                const currentEndDate = editingEvent.endDate || editingEvent.startDate;
+                                // If new start date is after current end date, adjust end date
+                                const updatedEndDate = newStartDate > currentEndDate ? newStartDate : currentEndDate;
                                 onChange({
                                     ...editingEvent,
-                                    startDate: e.target.value,
-                                })
-                            }
+                                    startDate: newStartDate,
+                                    endDate: updatedEndDate,
+                                });
+                            }}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            End Date{" "}
-                            <span className="text-slate-400 font-normal normal-case">
-                                (Optional)
-                            </span>
+                            End Date
                         </label>
                         <input
                             type="date"
@@ -112,41 +114,37 @@ export const EventModal: React.FC<EventModalProps> = ({
                         placeholder="Add details..."
                     />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Track
-                        </label>
-                        <select
-                            className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            value={editingEvent.trackId || ""}
-                            onChange={(e) =>
-                                onChange({
-                                    ...editingEvent,
-                                    trackId: e.target.value,
-                                })
-                            }
-                        >
-                            {tracks.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                    {t.title}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Event Color
-                        </label>
-                        <div className="h-[42px] flex items-center">
-                            <ColorPicker
-                                selected={editingEvent.color || "#3b82f6"}
-                                onChange={(color) =>
-                                    onChange({ ...editingEvent, color })
-                                }
-                            />
-                        </div>
-                    </div>
+                <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Track
+                    </label>
+                    <select
+                        className="block w-full rounded-lg border-slate-200 bg-slate-50 px-3 py-2.5 text-sm shadow-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+                        value={editingEvent.trackId || ""}
+                        onChange={(e) =>
+                            onChange({
+                                ...editingEvent,
+                                trackId: e.target.value,
+                            })
+                        }
+                    >
+                        {tracks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                                {t.title}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Event Color
+                    </label>
+                    <ColorPicker
+                        selected={editingEvent.color || "#3b82f6"}
+                        onChange={(color) =>
+                            onChange({ ...editingEvent, color })
+                        }
+                    />
                 </div>
             </div>
         </Modal>

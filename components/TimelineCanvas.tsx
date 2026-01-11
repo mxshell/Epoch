@@ -1,10 +1,17 @@
 import React from "react";
 import { GripVertical, Plus } from "lucide-react";
 import { IEvent, ITrack, IDragState, DragMode } from "../types";
+import {
+    TrackLaneInfo,
+    EventWithLane,
+    getTrackHeight,
+    getEventTopPosition,
+    EVENT_HEIGHT,
+} from "../utils/eventLanes";
 
 type TimelineCanvasProps = {
     tracks: ITrack[];
-    events: IEvent[];
+    trackLaneInfo: Map<string, TrackLaneInfo>;
     dragState: IDragState;
     isPanning: boolean;
     totalWidth: number;
@@ -31,7 +38,7 @@ const HoverHint = () => (
 
 export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     tracks,
-    events,
+    trackLaneInfo,
     dragState,
     isPanning,
     totalWidth,
@@ -47,7 +54,7 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
     dragGuides,
     getEventStyle,
 }) => {
-    const renderEvent = (event: IEvent, isDraggingThis: boolean) => {
+    const renderEvent = (event: EventWithLane, isDraggingThis: boolean) => {
         let style: React.CSSProperties = getEventStyle(event);
 
         if (isDraggingThis) {
@@ -94,16 +101,21 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         }
 
         const { backgroundColor, ...wrapperStyle } = style;
+        const topPosition = getEventTopPosition(event.lane);
 
         return (
             <div
                 key={event.id}
-                className={`absolute top-4 h-20 group/event ${
+                className={`absolute group/event ${
                     !isDraggingThis ? "z-10 cursor-grab" : ""
                 }`}
-                style={wrapperStyle}
+                style={{
+                    ...wrapperStyle,
+                    top: `${topPosition}px`,
+                    height: `${EVENT_HEIGHT}px`,
+                }}
                 onMouseDown={(e) => onDragStart(e, event, "move")}
-                onClick={(e) => {
+                onDoubleClick={(e) => {
                     e.stopPropagation();
                     onEditEvent(event);
                 }}
@@ -129,7 +141,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                                     onDragStart(e, event, "resize-start")
                                 }
                             >
-                                <GripVertical size={10} className="text-white/70" />
+                                <GripVertical
+                                    size={10}
+                                    className="text-white/70"
+                                />
                             </div>
                             <div
                                 className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-black/10 z-20 flex items-center justify-center opacity-0 group-hover/event:opacity-100 transition-opacity"
@@ -137,7 +152,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                                     onDragStart(e, event, "resize-end")
                                 }
                             >
-                                <GripVertical size={10} className="text-white/70" />
+                                <GripVertical
+                                    size={10}
+                                    className="text-white/70"
+                                />
                             </div>
                         </>
                     )}
@@ -149,8 +167,10 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                         <div className="text-[10px] font-medium opacity-90">
                             {event.startDate}
                         </div>
-                        {event.endDate && (
-                            <div className="text-[10px] opacity-75">→</div>
+                        {event.endDate && event.endDate !== event.startDate && (
+                            <div className="text-[10px] opacity-75">
+                                → {event.endDate}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -190,29 +210,42 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
                         const isTargetTrack =
                             dragState.isDragging &&
                             dragState.targetTrackId === track.id;
+                        // Convert track color to rgba with 15% opacity for background (subtle but visible)
+                        const trackBgColor = track.color
+                            ? `${track.color}26`
+                            : undefined; // 26 = ~15% opacity in hex
+
+                        const laneInfo = trackLaneInfo.get(track.id);
+                        const trackHeight = laneInfo
+                            ? getTrackHeight(laneInfo.maxLanes)
+                            : getTrackHeight(1);
+                        const trackEvents = laneInfo?.events || [];
+
                         return (
                             <div
                                 key={track.id}
                                 data-track-id={track.id}
-                                className={`h-32 border-b border-slate-100 relative group transition-colors ${
+                                className={`border-b border-slate-100 relative group transition-colors ${
                                     isTargetTrack
-                                        ? "bg-brand-50/40"
-                                        : "hover:bg-white/40"
+                                        ? "brightness-110"
+                                        : "hover:brightness-105"
                                 }`}
+                                style={{
+                                    backgroundColor: trackBgColor,
+                                    height: `${trackHeight}px`,
+                                }}
                                 onDoubleClick={(e) =>
                                     onTrackDoubleClick(e, track.id)
                                 }
                             >
                                 <HoverHint />
-                                {events
-                                    .filter((e) => e.trackId === track.id)
-                                    .map((event) =>
-                                        renderEvent(
-                                            event,
-                                            dragState.isDragging &&
-                                                dragState.eventId === event.id
-                                        )
-                                    )}
+                                {trackEvents.map((event) =>
+                                    renderEvent(
+                                        event,
+                                        dragState.isDragging &&
+                                            dragState.eventId === event.id
+                                    )
+                                )}
                             </div>
                         );
                     })}
@@ -221,4 +254,3 @@ export const TimelineCanvas: React.FC<TimelineCanvasProps> = ({
         </div>
     );
 };
-
