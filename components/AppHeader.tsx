@@ -71,7 +71,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                     </div>
                     <div>
                         <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-none">
-                            TimeLiner
+                            Epoch
                         </h1>
                         <span className="text-[10px] font-medium text-slate-400 tracking-wider uppercase">
                             Timeline Editor
