@@ -1,0 +1,103 @@
+# Epoch — The Most Beautiful Timeline Editor You'll Ever Use
+
+> **See your life unfold.** Your past victories, present ambitions, and future dreams—visualized in one stunning, panoramic view.
+
+## What is Epoch?
+
+Epoch is a gorgeous, intuitive visual timeline editor that lets you map out your entire life story. Whether you're planning your career trajectory, tracking personal milestones, documenting project histories, or dreaming about the future—Epoch makes time tangible.
+
+Think of it as the love child of a Gantt chart and a beautiful personal journal, designed for humans who want to *see* where they've been and where they're going.
+
+## Why Epoch?
+
+- **Multi-Track Mastery** — Organize your life into parallel tracks: Work, Personal, Health, Learning, Relationships, Side Projects. Watch how different threads of your life weave together.
+
+- **Buttery Smooth Interactions** — Drag events to reschedule them. Resize by dragging edges. Everything feels natural and responsive.
+
+- **Smart Lane Stacking** — Overlapping events? No problem. Epoch automatically stacks them in intelligent lanes so nothing gets hidden.
+
+- **Infinite Zoom** — View decades at a glance or zoom into hour-by-hour detail. From 10,000 feet to ground level in a scroll.
+
+- **Full Color Control** — Color-code tracks and individual events. Make your timeline as vibrant as your life.
+
+- **Your Data, Your Control** — Export to JSON anytime. Import from JSON. No accounts, no cloud lock-in. Everything persists locally in your browser.
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| Multi-Track Timeline | Organize events into separate tracks (Work, Personal, etc.) |
+| Drag & Drop | Move events by dragging, resize by dragging edges |
+| Smart Lane Stacking | Overlapping events automatically stack in lanes |
+| Dynamic Track Heights | Tracks expand to fit overlapping events |
+| Zoom Controls | From year overview to day-level detail |
+| Color Coding | Customizable colors for tracks and individual events |
+| Import/Export | Save and load timelines as JSON files |
+| Responsive Design | Works on desktop and tablet |
+
+## How to Use
+
+| Action | Gesture |
+|--------|---------|
+| Add Event | Double-click on empty canvas |
+| Edit Event | Double-click on an event |
+| Move Event | Drag the event |
+| Resize Event | Drag the left or right edge |
+| Add Track | Click the + button in the sidebar |
+| Edit Track | Hover over track name, click "Edit" |
+| Zoom | Use zoom controls in header or Ctrl+scroll |
+| Pan | Click and drag on empty canvas |
+
+## Data Format
+
+Epoch uses a simple JSON format:
+
+```json
+{
+  "tracks": [
+    { "id": "1", "title": "Career", "color": "#3b82f6", "order": 0 },
+    { "id": "2", "title": "Personal", "color": "#10b981", "order": 1 }
+  ],
+  "events": [
+    {
+      "id": "e1",
+      "trackId": "1",
+      "title": "Started New Job",
+      "startDate": "2024-01-15",
+      "endDate": "2024-02-28",
+      "color": "#3b82f6"
+    }
+  ]
+}
+```
+
+## Tech Stack
+
+- **React 19** — Cutting-edge UI framework
+- **TypeScript** — Full type safety
+- **Vite** — Lightning-fast build tool
+- **Tailwind CSS** — Utility-first styling
+- **Lucide React** — Beautiful icons
+
+## Perfect For
+
+- **Project Managers** — Visualize project timelines and milestones
+- **Students** — Plan your academic journey and career path
+- **Job Seekers** — Map out your career history for interviews
+- **Writers** — Plot timelines for novels and stories
+- **Goal Setters** — Track progress on life goals
+- **Event Planners** — Coordinate complex event schedules
+- **Life Coaches** — Help clients visualize their journey
+- **Researchers** — Create historical or project timelines
+
+## Why We Built This
+
+Because spreadsheets are boring. Because Gantt charts feel corporate. Because your life deserves better than a bullet-point list.
+
+Epoch is time made visual. It's your story, rendered beautifully.
+
+---
+
+**Built with love for people who think in timelines.**
+
+*Epoch: Where moments become movements.*
